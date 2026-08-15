@@ -95,13 +95,13 @@ public class AnalysisService {
             EngineResult before = allResults.get(i);
             EngineResult after = allResults.get(i + 1);
 
-            // Normalize scores to current player's perspective
-            int bestScore   = accuracyCalculator.normalizeScore(before.getCentipawnScore(), isWhiteMove);
-            int actualScore = accuracyCalculator.normalizeScore(after.getCentipawnScore(), isWhiteMove);
+            // Stockfish scores are always from side-to-move's perspective.
+            // before: current player to move  → score is already from their POV
+            // after:  opponent to move        → score is from opponent's POV, so negate
+            int bestScore   = before.getCentipawnScore();
+            int actualScore = -after.getCentipawnScore(); // negate — opponent is now to move
             int cpLoss      = Math.max(0, bestScore - actualScore);
 
-            // Convert to win probability — this accounts for position context
-            // e.g. 50cp loss when equal hurts more than 50cp loss when +500
             double winBefore = accuracyCalculator.winProbability(bestScore);
             double winAfter  = accuracyCalculator.winProbability(actualScore);
 

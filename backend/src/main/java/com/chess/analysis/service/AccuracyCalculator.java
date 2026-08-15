@@ -52,9 +52,4 @@ public class AccuracyCalculator {
         return Math.round(avg * 10.0) / 10.0;
     }
 
-    // Stockfish scores are always from white's perspective (+ve = white winning)
-    // Flip for black so we always work from "current player's perspective"
-    public int normalizeScore(int rawScore, boolean isWhiteMove) {
-        return isWhiteMove ? rawScore : -rawScore;
-    }
 }
