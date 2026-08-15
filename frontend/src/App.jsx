@@ -1,0 +1,121 @@
+import { useState } from 'react'
+import { getGames, analyzeGame } from './api/chessApi'
+import UsernameForm from './components/UsernameForm'
+import GameList from './components/GameList'
+import Board from './components/Board'
+import EvalBar from './components/EvalBar'
+import MoveList from './components/MoveList'
+import AccuracyBadge from './components/AccuracyBadge'
+import './App.css'
+
+const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+export default function App() {
+  const [games, setGames] = useState([])
+  const [analysis, setAnalysis] = useState(null)
+  const [currentIndex, setCurrentIndex] = useState(-1)
+  const [loadingGames, setLoadingGames] = useState(false)
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleFetchGames = async (username) => {
+    setError(null)
+    setGames([])
+    setAnalysis(null)
+    setCurrentIndex(-1)
+    setLoadingGames(true)
+    try {
+      const data = await getGames(username, 10)
+      setGames(data)
+    } catch (e) {
+      setError(`Could not fetch games for "${username}". Check the username and try again.`)
+    } finally {
+      setLoadingGames(false)
+    }
+  }
+
+  const handleSelectGame = async (game) => {
+    setError(null)
+    setAnalysis(null)
+    setCurrentIndex(-1)
+    setLoadingAnalysis(true)
+    try {
+      const data = await analyzeGame(game)
+      setAnalysis(data)
+      setCurrentIndex(0)
+    } catch (e) {
+      setError('Analysis failed. Please try again.')
+    } finally {
+      setLoadingAnalysis(false)
+    }
+  }
+
+  const handleMoveClick = (index) => setCurrentIndex(index)
+
+  // Keyboard navigation: left/right arrow keys
+  const handleKeyDown = (e) => {
+    if (!analysis) return
+    if (e.key === 'ArrowRight') setCurrentIndex(i => Math.min(i + 1, analysis.moves.length - 1))
+    if (e.key === 'ArrowLeft')  setCurrentIndex(i => Math.max(i - 1, 0))
+  }
+
+  const currentMove  = analysis && currentIndex >= 0 ? analysis.moves[currentIndex] : null
+  const currentFen   = currentMove ? currentMove.fenBefore : START_FEN
+  const currentScore = currentMove ? currentMove.scoreBefore : 0
+
+  return (
+    <div className="app" onKeyDown={handleKeyDown} tabIndex={0}>
+      <UsernameForm onSubmit={handleFetchGames} loading={loadingGames} />
+
+      {error && <div className="error">{error}</div>}
+
+      <div className="main-layout">
+        {/* Game picker */}
+        {games.length > 0 && !analysis && !loadingAnalysis && (
+          <GameList games={games} onSelect={handleSelectGame} loading={loadingAnalysis} />
+        )}
+
+        {/* Stockfish loading state */}
+        {loadingAnalysis && (
+          <div className="loading-analysis">
+            <div className="spinner" />
+            <p>Analyzing with Stockfish...</p>
+            <p className="loading-sub">This takes about 15 seconds</p>
+          </div>
+        )}
+
+        {/* Full analysis view */}
+        {analysis && (
+          <div className="analysis-layout">
+            <EvalBar score={currentScore} />
+
+            <div className="center-panel">
+              <div className="game-header">
+                <AccuracyBadge label={`⬜ ${analysis.whitePlayer}`} accuracy={analysis.whiteAccuracy} />
+                <div className="game-result">{analysis.result}</div>
+                <AccuracyBadge label={`⬛ ${analysis.blackPlayer}`} accuracy={analysis.blackAccuracy} />
+              </div>
+
+              <Board fen={currentFen} moveAnalysis={currentMove} />
+
+              {currentMove && (
+                <div className="move-detail">
+                  <span>Played: <strong>{currentMove.playedMove}</strong></span>
+                  <span>Best: <strong style={{ color: '#4caf50' }}>{currentMove.bestMove}</strong></span>
+                  <span>Loss: <strong>{currentMove.centipawnLoss}cp</strong></span>
+                  <span className={`classification ${currentMove.classification.toLowerCase()}`}>
+                    {currentMove.classification}
+                  </span>
+                </div>
+              )}
+
+              <div className="nav-hint">Use ← → arrow keys to navigate moves</div>
+            </div>
+
+            <MoveList moves={analysis.moves} currentIndex={currentIndex} onMoveClick={handleMoveClick} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
