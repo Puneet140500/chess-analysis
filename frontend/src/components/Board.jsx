@@ -1,6 +1,6 @@
 import { Chessboard } from 'react-chessboard'
+import { useEffect, useRef, useState } from 'react'
 
-// Classification colors for the move highlight square
 const CLASS_COLORS = {
   BRILLIANT: 'rgba(27, 172, 166, 0.6)',
   BEST:      'rgba(76, 175, 80, 0.6)',
@@ -12,28 +12,44 @@ const CLASS_COLORS = {
 }
 
 export default function Board({ fen, moveAnalysis }) {
-  // Build custom square styles — highlight the square the player moved TO
+  const containerRef = useRef(null)
+  const [size, setSize] = useState(300)
+
+  // Observe the container and match boardWidth to its actual rendered width
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const w = Math.floor(entry.contentRect.width)
+        if (w > 0) setSize(w)
+      }
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
+
   const customSquareStyles = {}
   if (moveAnalysis) {
-    const toSquare = moveAnalysis.playedMove.slice(2, 4) // "e2e4" → "e4"
+    const toSquare = moveAnalysis.playedMove.slice(2, 4)
     customSquareStyles[toSquare] = {
       backgroundColor: CLASS_COLORS[moveAnalysis.classification] || 'rgba(158,158,158,0.4)'
     }
   }
 
-  // Build best move arrow — from square → to square
   const customArrows = []
   if (moveAnalysis && moveAnalysis.bestMove && moveAnalysis.bestMove !== moveAnalysis.playedMove) {
-    const from = moveAnalysis.bestMove.slice(0, 2) // "e2"
-    const to   = moveAnalysis.bestMove.slice(2, 4) // "e4"
-    customArrows.push([from, to, 'rgb(0, 128, 0)']) // green arrow
+    customArrows.push([
+      moveAnalysis.bestMove.slice(0, 2),
+      moveAnalysis.bestMove.slice(2, 4),
+      'rgb(0, 128, 0)'
+    ])
   }
 
   return (
-    <div className="board-container">
+    <div className="board-container" ref={containerRef}>
       <Chessboard
         position={fen}
-        boardWidth={480}
+        boardWidth={size}
         customSquareStyles={customSquareStyles}
         customArrows={customArrows}
         arePiecesDraggable={false}

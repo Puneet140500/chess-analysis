@@ -52,7 +52,6 @@ export default function App() {
 
   const handleMoveClick = (index) => setCurrentIndex(index)
 
-  // Keyboard navigation: left/right arrow keys
   const handleKeyDown = (e) => {
     if (!analysis) return
     if (e.key === 'ArrowRight') setCurrentIndex(i => Math.min(i + 1, analysis.moves.length - 1))
@@ -69,53 +68,71 @@ export default function App() {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="main-layout">
-        {/* Game picker */}
-        {games.length > 0 && !analysis && !loadingAnalysis && (
+      {/* Game picker */}
+      {games.length > 0 && !analysis && !loadingAnalysis && (
+        <div className="main-layout">
           <GameList games={games} onSelect={handleSelectGame} loading={loadingAnalysis} />
-        )}
+        </div>
+      )}
 
-        {/* Stockfish loading state */}
-        {loadingAnalysis && (
+      {/* Stockfish loading */}
+      {loadingAnalysis && (
+        <div className="main-layout">
           <div className="loading-analysis">
             <div className="spinner" />
             <p>Analyzing with Stockfish...</p>
             <p className="loading-sub">This takes about 15 seconds</p>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Full analysis view */}
-        {analysis && (
-          <div className="analysis-layout">
-            <EvalBar score={currentScore} />
+      {/* Analysis — 3-column layout */}
+      {analysis && (
+        <div className="analysis-layout">
 
-            <div className="center-panel">
-              <div className="game-header">
-                <AccuracyBadge label={`⬜ ${analysis.whitePlayer}`} accuracy={analysis.whiteAccuracy} />
-                <div className="game-result">{analysis.result}</div>
-                <AccuracyBadge label={`⬛ ${analysis.blackPlayer}`} accuracy={analysis.blackAccuracy} />
-              </div>
-
-              <Board fen={currentFen} moveAnalysis={currentMove} />
-
-              {currentMove && (
-                <div className="move-detail">
-                  <span>Played: <strong>{currentMove.playedMove}</strong></span>
-                  <span>Best: <strong style={{ color: '#4caf50' }}>{currentMove.bestMove}</strong></span>
-                  <span>Loss: <strong>{currentMove.centipawnLoss}cp</strong></span>
-                  <span className={`classification ${currentMove.classification.toLowerCase()}`}>
-                    {currentMove.classification}
-                  </span>
-                </div>
-              )}
-
-              <div className="nav-hint">Use ← → arrow keys to navigate moves</div>
+          {/* LEFT PANEL — eval bar + black player info */}
+          <div className="left-panel">
+            <div className="player-card black">
+              <span className="player-color-dot black-dot" />
+              <span className="player-name">{analysis.blackPlayer}</span>
+              <AccuracyBadge accuracy={analysis.blackAccuracy} />
             </div>
-
-            <MoveList moves={analysis.moves} currentIndex={currentIndex} onMoveClick={handleMoveClick} />
+            <EvalBar score={currentScore} />
+            <div className="player-card white">
+              <span className="player-color-dot white-dot" />
+              <span className="player-name">{analysis.whitePlayer}</span>
+              <AccuracyBadge accuracy={analysis.whiteAccuracy} />
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* CENTER PANEL — board fills all available space */}
+          <div className="center-panel">
+            <Board fen={currentFen} moveAnalysis={currentMove} />
+            {currentMove && (
+              <div className="move-detail">
+                <span>Played: <strong>{currentMove.playedMove}</strong></span>
+                <span>Best: <strong style={{ color: '#4caf50' }}>{currentMove.bestMove}</strong></span>
+                <span>Loss: <strong>{currentMove.centipawnLoss}cp</strong></span>
+                <span className={`classification ${currentMove.classification.toLowerCase()}`}>
+                  {currentMove.classification}
+                </span>
+              </div>
+            )}
+            <div className="nav-hint">← → arrow keys to navigate moves</div>
+          </div>
+
+          {/* RIGHT PANEL — move list */}
+          <div className="right-panel">
+            <div className="game-result-badge">{analysis.result}</div>
+            <MoveList
+              moves={analysis.moves}
+              currentIndex={currentIndex}
+              onMoveClick={handleMoveClick}
+            />
+          </div>
+
+        </div>
+      )}
     </div>
   )
 }
