@@ -34,14 +34,13 @@ public class StockfishEngine implements ChessEngine {
     }
 
     @Override
-    public EngineResult analyze(String fen, int moveTimeMs) {
+    public EngineResult analyze(String fen, int depth, int moveTimeMs) {
         available.set(false);
         try {
-            // Tell Stockfish which position to analyze
             sendCommand("position fen " + fen);
-            // Tell Stockfish to search for moveTimeMs milliseconds
-            sendCommand("go movetime " + moveTimeMs);
-            // Read output until we get "bestmove"
+            // Use fixed depth for consistent quality across all positions.
+            // movetime is a safety cap so a pathological position can't hang forever.
+            sendCommand("go depth " + depth + " movetime " + moveTimeMs);
             return parseResult();
         } catch (IOException e) {
             throw new RuntimeException("Error analyzing position: " + fen, e);

@@ -5,7 +5,8 @@ package com.chess.analysis.engine;
 public interface ChessEngine {
 
     // Given a FEN position, returns the best move in UCI format (e.g. "e2e4")
-    EngineResult analyze(String fen, int moveTimeMs);
+    // depth: fixed search depth (consistent quality); moveTimeMs: fallback time limit
+    EngineResult analyze(String fen, int depth, int moveTimeMs);
 
     // Check if this engine instance is available (not currently analyzing)
     boolean isAvailable();

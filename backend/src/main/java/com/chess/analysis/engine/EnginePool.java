@@ -17,13 +17,16 @@ public class EnginePool {
 
     private final BlockingQueue<ChessEngine> pool;
     private final List<ChessEngine> allEngines;
+    private final int depth;
     private final int moveTimeMs;
 
     public EnginePool(
             @Value("${stockfish.path}") String stockfishPath,
             @Value("${stockfish.pool.size}") int poolSize,
+            @Value("${stockfish.depth}") int depth,
             @Value("${stockfish.movetime.ms}") int moveTimeMs) {
 
+        this.depth = depth;
         this.moveTimeMs = moveTimeMs;
         this.pool = new LinkedBlockingQueue<>(poolSize);
         this.allEngines = new ArrayList<>(poolSize);
@@ -49,7 +52,7 @@ public class EnginePool {
             CompletableFuture<EngineResult> future = CompletableFuture.supplyAsync(() -> {
                 ChessEngine engine = borrowEngine(); // blocks if all engines are busy
                 try {
-                    return engine.analyze(fen, moveTimeMs);
+                    return engine.analyze(fen, depth, moveTimeMs);
                 } finally {
                     returnEngine(engine); // always return, even if analysis throws
                 }
