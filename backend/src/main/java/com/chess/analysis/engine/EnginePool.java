@@ -41,26 +41,41 @@ public class EnginePool {
         log.info("Engine pool ready with {} instances", poolSize);
     }
 
-    // Analyze a list of positions in parallel using all available engines
-    // Uses CompletableFuture so all positions run concurrently
+    // Analyze a list of FEN positions — returns best move + score for each
     public List<EngineResult> analyzeAll(List<String> fenPositions) {
-        ExecutorService executor = Executors.newFixedThreadPool(allEngines.size());
+        return runParallel(fenPositions.stream()
+                .map(fen -> (java.util.function.Supplier<EngineResult>)
+                        () -> borrowAndRun(engine -> engine.analyze(fen, depth, moveTimeMs)))
+                .toList());
+    }
 
-        List<CompletableFuture<EngineResult>> futures = new ArrayList<>();
-
-        for (String fen : fenPositions) {
-            CompletableFuture<EngineResult> future = CompletableFuture.supplyAsync(() -> {
-                ChessEngine engine = borrowEngine(); // blocks if all engines are busy
-                try {
-                    return engine.analyze(fen, depth, moveTimeMs);
-                } finally {
-                    returnEngine(engine); // always return, even if analysis throws
-                }
-            }, executor);
-            futures.add(future);
+    // For each (fen, playedMove) pair, evaluate ONLY the played move from that position
+    // This gives a score consistent with analyzeAll() — both evaluated from the same position
+    public List<EngineResult> analyzePlayedMoves(List<String> fenPositions, List<String> playedMoves) {
+        List<java.util.function.Supplier<EngineResult>> tasks = new ArrayList<>();
+        for (int i = 0; i < fenPositions.size(); i++) {
+            final String fen  = fenPositions.get(i);
+            final String move = playedMoves.get(i);
+            tasks.add(() -> borrowAndRun(engine -> engine.analyzeMove(fen, move, depth, moveTimeMs)));
         }
+        return runParallel(tasks);
+    }
 
-        // Wait for all analyses to complete, maintaining original order
+    private EngineResult borrowAndRun(java.util.function.Function<ChessEngine, EngineResult> task) {
+        ChessEngine engine = borrowEngine();
+        try {
+            return task.apply(engine);
+        } finally {
+            returnEngine(engine);
+        }
+    }
+
+    private List<EngineResult> runParallel(List<java.util.function.Supplier<EngineResult>> tasks) {
+        ExecutorService executor = Executors.newFixedThreadPool(allEngines.size());
+        List<CompletableFuture<EngineResult>> futures = tasks.stream()
+                .map(task -> CompletableFuture.supplyAsync(task::get, executor))
+                .toList();
+
         List<EngineResult> results = new ArrayList<>();
         for (CompletableFuture<EngineResult> future : futures) {
             try {
@@ -69,7 +84,6 @@ public class EnginePool {
                 throw new RuntimeException("Engine analysis failed", e);
             }
         }
-
         executor.shutdown();
         return results;
     }

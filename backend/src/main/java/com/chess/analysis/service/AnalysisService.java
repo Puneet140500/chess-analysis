@@ -40,20 +40,17 @@ public class AnalysisService {
 
         log.info("Parsed {} moves, sending to engine pool...", moves.size());
 
-        // Step 2: Build the full list of positions — before every move PLUS the final position
-        // For 40 moves: 41 positions total (indices 0..40)
-        // Position[i] is the board before move[i]
-        // Position[40] is the board after the last move
-        List<String> allFens = new ArrayList<>(fenPositions);
-        allFens.add(buildFinalFen(fenPositions, moves)); // add position after last move
+        // Step 2: For each position, get the BEST move score
+        // analyze(fen) → Stockfish finds the best move and returns its score
+        List<EngineResult> bestResults = enginePool.analyzeAll(fenPositions);
 
-        // Step 3: Analyze all N+1 positions in ONE parallel batch (was 2 batches before)
-        // This halves the total Stockfish work: 41 analyses instead of 80+80=160
-        List<EngineResult> allResults = enginePool.analyzeAll(allFens);
+        // Step 3: For each position, get the score of the move ACTUALLY PLAYED
+        // analyzeMove(fen, playedMove) → Stockfish evaluates ONLY the played move
+        // Both steps use the same FEN, same depth → scores are directly comparable
+        List<EngineResult> playedResults = enginePool.analyzePlayedMoves(fenPositions, moves);
 
-        // Step 4: Build MoveAnalysis for each move
-        // For move[i]: scoreBefore = allResults[i], scoreAfter = allResults[i+1]
-        List<MoveAnalysis> moveAnalyses = buildMoveAnalyses(moves, allFens, allResults);
+        // Step 4: Build MoveAnalysis — cpLoss = bestScore - playedScore (same perspective, same position)
+        List<MoveAnalysis> moveAnalyses = buildMoveAnalyses(moves, fenPositions, bestResults, playedResults);
 
         // Step 5: Calculate overall accuracy for white and black separately
         List<Double> whiteAccuracies = new ArrayList<>();
@@ -79,63 +76,62 @@ public class AnalysisService {
                 .build();
     }
 
-    // allFens has N+1 entries: position before each move + final position after last move
-    // allResults has N+1 entries: one analysis per FEN
-    // For move[i]: before = allResults[i], after = allResults[i+1]
+    // bestResults[i]    = Stockfish's best move + score from fenPositions[i]
+    // playedResults[i]  = score of moves[i] restricted from fenPositions[i]
+    // Both from the SAME position at the SAME depth → directly comparable, no sign flip needed
     private List<MoveAnalysis> buildMoveAnalyses(
             List<String> moves,
-            List<String> allFens,
-            List<EngineResult> allResults) {
+            List<String> fenPositions,
+            List<EngineResult> bestResults,
+            List<EngineResult> playedResults) {
 
         List<MoveAnalysis> analyses = new ArrayList<>();
+
+        // Build FEN-after-move for rendering the board after each move
+        List<String> fensAfter = buildFensAfterMoves(fenPositions, moves);
 
         for (int i = 0; i < moves.size(); i++) {
             boolean isWhiteMove = (i % 2 == 0);
 
-            EngineResult before = allResults.get(i);
-            EngineResult after = allResults.get(i + 1);
+            int bestScore   = bestResults.get(i).getCentipawnScore();
+            int playedScore = playedResults.get(i).getCentipawnScore();
 
-            // Stockfish scores are always from side-to-move's perspective.
-            // before: current player to move  → score is already from their POV
-            // after:  opponent to move        → score is from opponent's POV, so negate
-            int bestScore   = before.getCentipawnScore();
-            int actualScore = -after.getCentipawnScore(); // negate — opponent is now to move
-            int cpLoss      = Math.max(0, bestScore - actualScore);
+            // Both scores are from side-to-move perspective at the same position
+            // No sign flip needed — cpLoss is always >= 0
+            int cpLoss = Math.max(0, bestScore - playedScore);
 
             double winBefore = accuracyCalculator.winProbability(bestScore);
-            double winAfter  = accuracyCalculator.winProbability(actualScore);
-
-            double accuracy = accuracyCalculator.moveAccuracy(winBefore, winAfter);
-            MoveClassification classification = accuracyCalculator.classify(cpLoss);
+            double winAfter  = accuracyCalculator.winProbability(playedScore);
+            double accuracy  = accuracyCalculator.moveAccuracy(winBefore, winAfter);
 
             analyses.add(MoveAnalysis.builder()
                     .moveNumber(i / 2 + 1)
                     .playedMove(moves.get(i))
-                    .bestMove(before.getBestMove())
-                    .scoreBefore(before.getCentipawnScore())
-                    .scoreAfter(after.getCentipawnScore())
-                    .bestMoveScore(before.getCentipawnScore())
+                    .bestMove(bestResults.get(i).getBestMove())
+                    .scoreBefore(bestScore)
+                    .scoreAfter(playedScore)
+                    .bestMoveScore(bestScore)
                     .centipawnLoss(cpLoss)
                     .accuracy(accuracy)
-                    .classification(classification)
+                    .classification(accuracyCalculator.classify(cpLoss))
                     .isWhiteMove(isWhiteMove)
-                    .fenBefore(allFens.get(i))
-                    .fenAfter(allFens.get(i + 1))
+                    .fenBefore(fenPositions.get(i))
+                    .fenAfter(fensAfter.get(i))
                     .build());
         }
         return analyses;
     }
 
-    // Replays all moves and returns the FEN after the last move
-    // This gives us the N+1th position we need for the final move's scoreAfter
-    private String buildFinalFen(List<String> fensBefore, List<String> moves) {
+    private List<String> buildFensAfterMoves(List<String> fensBefore, List<String> moves) {
+        List<String> fensAfter = new ArrayList<>();
         com.github.bhlangonijr.chesslib.Board board = new com.github.bhlangonijr.chesslib.Board();
         board.loadFromFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         for (String uciMove : moves) {
             com.github.bhlangonijr.chesslib.move.Move move =
                     new com.github.bhlangonijr.chesslib.move.Move(uciMove, board.getSideToMove());
             board.doMove(move);
+            fensAfter.add(board.getFen());
         }
-        return board.getFen();
+        return fensAfter;
     }
 }
