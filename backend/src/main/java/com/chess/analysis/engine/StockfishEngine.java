@@ -47,21 +47,6 @@ public class StockfishEngine implements ChessEngine {
         }
     }
 
-    @Override
-    public EngineResult analyzeMove(String fen, String move, int depth, int moveTimeMs) {
-        available.set(false);
-        try {
-            sendCommand("position fen " + fen);
-            // searchmoves restricts Stockfish to only evaluate this one move
-            // Score returned is from the SAME position as analyze() — consistent comparison
-            sendCommand("go depth " + depth + " movetime " + moveTimeMs + " searchmoves " + move);
-            return parseResult();
-        } catch (IOException e) {
-            throw new RuntimeException("Error analyzing move: " + move + " in position: " + fen, e);
-        } finally {
-            available.set(true);
-        }
-    }
 
     // Reads Stockfish output line by line until "bestmove" appears
     // Along the way, captures the last "info" line which has the score

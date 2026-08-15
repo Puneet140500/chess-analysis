@@ -40,17 +40,15 @@ public class AnalysisService {
 
         log.info("Parsed {} moves, sending to engine pool...", moves.size());
 
-        // Step 2: For each position, get the BEST move score
-        // analyze(fen) → Stockfish finds the best move and returns its score
-        List<EngineResult> bestResults = enginePool.analyzeAll(fenPositions);
+        // Step 2: Analyze all N+1 positions (before each move + final position)
+        // Position[i] is before move[i], Position[N] is after the last move
+        List<String> allFens = new ArrayList<>(fenPositions);
+        allFens.add(buildFinalFen(moves));
 
-        // Step 3: For each position, get the score of the move ACTUALLY PLAYED
-        // analyzeMove(fen, playedMove) → Stockfish evaluates ONLY the played move
-        // Both steps use the same FEN, same depth → scores are directly comparable
-        List<EngineResult> playedResults = enginePool.analyzePlayedMoves(fenPositions, moves);
+        List<EngineResult> allResults = enginePool.analyzeAll(allFens);
 
-        // Step 4: Build MoveAnalysis — cpLoss = bestScore - playedScore (same perspective, same position)
-        List<MoveAnalysis> moveAnalyses = buildMoveAnalyses(moves, fenPositions, bestResults, playedResults);
+        // Step 3: For move[i]: bestScore = allResults[i], actualScore = allResults[i+1]
+        List<MoveAnalysis> moveAnalyses = buildMoveAnalyses(moves, fenPositions, allResults);
 
         // Step 5: Calculate overall accuracy for white and black separately
         List<Double> whiteAccuracies = new ArrayList<>();
@@ -76,62 +74,53 @@ public class AnalysisService {
                 .build();
     }
 
-    // bestResults[i]    = Stockfish's best move + score from fenPositions[i]
-    // playedResults[i]  = score of moves[i] restricted from fenPositions[i]
-    // Both from the SAME position at the SAME depth → directly comparable, no sign flip needed
+    // allResults[i] = best score from position before move[i]  (side-to-move POV)
+    // allResults[i+1] = best score from position after move[i] (opponent's POV → negate)
     private List<MoveAnalysis> buildMoveAnalyses(
             List<String> moves,
             List<String> fenPositions,
-            List<EngineResult> bestResults,
-            List<EngineResult> playedResults) {
+            List<EngineResult> allResults) {
 
         List<MoveAnalysis> analyses = new ArrayList<>();
-
-        // Build FEN-after-move for rendering the board after each move
-        List<String> fensAfter = buildFensAfterMoves(fenPositions, moves);
 
         for (int i = 0; i < moves.size(); i++) {
             boolean isWhiteMove = (i % 2 == 0);
 
-            int bestScore   = bestResults.get(i).getCentipawnScore();
-            int playedScore = playedResults.get(i).getCentipawnScore();
-
-            // Both scores are from side-to-move perspective at the same position
-            // No sign flip needed — cpLoss is always >= 0
-            int cpLoss = Math.max(0, bestScore - playedScore);
+            int bestScore   = allResults.get(i).getCentipawnScore();
+            // after the move, opponent is to move — negate to stay in current player's POV
+            int actualScore = -allResults.get(i + 1).getCentipawnScore();
+            int cpLoss      = Math.max(0, bestScore - actualScore);
 
             double winBefore = accuracyCalculator.winProbability(bestScore);
-            double winAfter  = accuracyCalculator.winProbability(playedScore);
+            double winAfter  = accuracyCalculator.winProbability(actualScore);
             double accuracy  = accuracyCalculator.moveAccuracy(winBefore, winAfter);
 
             analyses.add(MoveAnalysis.builder()
                     .moveNumber(i / 2 + 1)
                     .playedMove(moves.get(i))
-                    .bestMove(bestResults.get(i).getBestMove())
+                    .bestMove(allResults.get(i).getBestMove())
                     .scoreBefore(bestScore)
-                    .scoreAfter(playedScore)
+                    .scoreAfter(actualScore)
                     .bestMoveScore(bestScore)
                     .centipawnLoss(cpLoss)
                     .accuracy(accuracy)
                     .classification(accuracyCalculator.classify(cpLoss))
                     .isWhiteMove(isWhiteMove)
                     .fenBefore(fenPositions.get(i))
-                    .fenAfter(fensAfter.get(i))
+                    .fenAfter(i + 1 < fenPositions.size() ? fenPositions.get(i + 1) : fenPositions.get(i))
                     .build());
         }
         return analyses;
     }
 
-    private List<String> buildFensAfterMoves(List<String> fensBefore, List<String> moves) {
-        List<String> fensAfter = new ArrayList<>();
+    private String buildFinalFen(List<String> moves) {
         com.github.bhlangonijr.chesslib.Board board = new com.github.bhlangonijr.chesslib.Board();
         board.loadFromFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         for (String uciMove : moves) {
             com.github.bhlangonijr.chesslib.move.Move move =
                     new com.github.bhlangonijr.chesslib.move.Move(uciMove, board.getSideToMove());
             board.doMove(move);
-            fensAfter.add(board.getFen());
         }
-        return fensAfter;
+        return board.getFen();
     }
 }

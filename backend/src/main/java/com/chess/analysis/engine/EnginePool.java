@@ -41,40 +41,22 @@ public class EnginePool {
         log.info("Engine pool ready with {} instances", poolSize);
     }
 
-    // Analyze a list of FEN positions — returns best move + score for each
+    // Analyze a list of FEN positions in parallel — returns best move + score for each
     public List<EngineResult> analyzeAll(List<String> fenPositions) {
-        return runParallel(fenPositions.stream()
-                .map(fen -> (java.util.function.Supplier<EngineResult>)
-                        () -> borrowAndRun(engine -> engine.analyze(fen, depth, moveTimeMs)))
-                .toList());
-    }
-
-    // For each (fen, playedMove) pair, evaluate ONLY the played move from that position
-    // This gives a score consistent with analyzeAll() — both evaluated from the same position
-    public List<EngineResult> analyzePlayedMoves(List<String> fenPositions, List<String> playedMoves) {
-        List<java.util.function.Supplier<EngineResult>> tasks = new ArrayList<>();
-        for (int i = 0; i < fenPositions.size(); i++) {
-            final String fen  = fenPositions.get(i);
-            final String move = playedMoves.get(i);
-            tasks.add(() -> borrowAndRun(engine -> engine.analyzeMove(fen, move, depth, moveTimeMs)));
-        }
-        return runParallel(tasks);
-    }
-
-    private EngineResult borrowAndRun(java.util.function.Function<ChessEngine, EngineResult> task) {
-        ChessEngine engine = borrowEngine();
-        try {
-            return task.apply(engine);
-        } finally {
-            returnEngine(engine);
-        }
-    }
-
-    private List<EngineResult> runParallel(List<java.util.function.Supplier<EngineResult>> tasks) {
         ExecutorService executor = Executors.newFixedThreadPool(allEngines.size());
-        List<CompletableFuture<EngineResult>> futures = tasks.stream()
-                .map(task -> CompletableFuture.supplyAsync(task::get, executor))
-                .toList();
+        List<CompletableFuture<EngineResult>> futures = new ArrayList<>();
+
+        for (String fen : fenPositions) {
+            CompletableFuture<EngineResult> future = CompletableFuture.supplyAsync(() -> {
+                ChessEngine engine = borrowEngine();
+                try {
+                    return engine.analyze(fen, depth, moveTimeMs);
+                } finally {
+                    returnEngine(engine);
+                }
+            }, executor);
+            futures.add(future);
+        }
 
         List<EngineResult> results = new ArrayList<>();
         for (CompletableFuture<EngineResult> future : futures) {
