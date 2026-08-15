@@ -93,13 +93,19 @@ public class AnalysisService {
             boolean isWhiteMove = (i % 2 == 0);
 
             EngineResult before = allResults.get(i);
-            EngineResult after = allResults.get(i + 1); // next position's analysis
+            EngineResult after = allResults.get(i + 1);
 
-            int bestScore = accuracyCalculator.normalizeScore(before.getCentipawnScore(), isWhiteMove);
+            // Normalize scores to current player's perspective
+            int bestScore   = accuracyCalculator.normalizeScore(before.getCentipawnScore(), isWhiteMove);
             int actualScore = accuracyCalculator.normalizeScore(after.getCentipawnScore(), isWhiteMove);
-            int cpLoss = Math.max(0, bestScore - actualScore);
+            int cpLoss      = Math.max(0, bestScore - actualScore);
 
-            double accuracy = accuracyCalculator.moveAccuracy(cpLoss);
+            // Convert to win probability — this accounts for position context
+            // e.g. 50cp loss when equal hurts more than 50cp loss when +500
+            double winBefore = accuracyCalculator.winProbability(bestScore);
+            double winAfter  = accuracyCalculator.winProbability(actualScore);
+
+            double accuracy = accuracyCalculator.moveAccuracy(winBefore, winAfter);
             MoveClassification classification = accuracyCalculator.classify(cpLoss);
 
             analyses.add(MoveAnalysis.builder()
