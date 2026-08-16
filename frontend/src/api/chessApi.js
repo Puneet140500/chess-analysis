@@ -15,3 +15,7 @@ export const analyzeGame = (game) =>
 // Analyze a single FEN position — returns bestMove + eval (for interactive board)
 export const analyzePosition = (fen) =>
   api.post('/analyze-position', { fen }).then(r => r.data)
+
+// Search ECO opening database
+export const searchOpenings = (q = '', eco = '', limit = 120) =>
+  api.get('/openings', { params: { q, eco, limit } }).then(r => r.data)

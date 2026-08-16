@@ -5,6 +5,7 @@ import com.chess.analysis.engine.EngineResult;
 import com.chess.analysis.model.Game;
 import com.chess.analysis.model.GameAnalysis;
 import com.chess.analysis.service.AnalysisService;
+import com.chess.analysis.service.EcoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ public class GameController {
 
     private final AnalysisService analysisService;
     private final EnginePool enginePool;
+    private final EcoService ecoService;
 
     // GET /api/games?username=hikaru&limit=10
     // Returns recent games (no analysis) so user can pick one
@@ -47,6 +49,16 @@ public class GameController {
     public ResponseEntity<EngineResult> analyzePosition(@RequestBody PositionRequest req) {
         List<EngineResult> results = enginePool.analyzeAll(List.of(req.fen()));
         return ResponseEntity.ok(results.get(0));
+    }
+
+    // GET /api/openings?q=italian&limit=80
+    // Search the ECO database — returns eco, name, moves (SAN string)
+    @GetMapping("/openings")
+    public ResponseEntity<List<EcoService.Opening>> searchOpenings(
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "") String eco,
+            @RequestParam(defaultValue = "120") int limit) {
+        return ResponseEntity.ok(ecoService.search(q, eco, limit));
     }
 
     record PositionRequest(String fen) {}
