@@ -6,6 +6,7 @@ import Board from './components/Board'
 import EvalBar from './components/EvalBar'
 import MoveList from './components/MoveList'
 import AccuracyBadge from './components/AccuracyBadge'
+import LessonsPage from './components/LessonsPage'
 import './App.css'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -14,6 +15,7 @@ export default function App() {
   const [games, setGames] = useState([])
   const [analysis, setAnalysis] = useState(null)
   const [currentIndex, setCurrentIndex] = useState(-1)
+  const [tab, setTab] = useState('analysis')
   const [loadingGames, setLoadingGames] = useState(false)
   const [loadingAnalysis, setLoadingAnalysis] = useState(false)
   const [error, setError] = useState(null)
@@ -79,6 +81,14 @@ export default function App() {
 
   return (
     <div className="app">
+      <div className="app-tabs">
+        <button className={`app-tab ${tab === 'analysis' ? 'active' : ''}`} onClick={() => setTab('analysis')}>Analysis</button>
+        <button className={`app-tab ${tab === 'lessons'  ? 'active' : ''}`} onClick={() => setTab('lessons')}>Lessons</button>
+      </div>
+
+      {tab === 'lessons' && <LessonsPage />}
+
+      {tab === 'analysis' && <>
       <UsernameForm onSubmit={handleFetchGames} loading={loadingGames} />
 
       {error && <div className="error">{error}</div>}
@@ -159,6 +169,8 @@ export default function App() {
 
         </div>
       )}
+      </>
+      }
     </div>
   )
 }
