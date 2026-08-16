@@ -182,8 +182,7 @@ body {
   overflow: hidden;
 }
 
-/* Board: square constrained by BOTH available width and available height.
-   170px = app padding + username form + move-detail row + nav hint + gaps */
+/* Board: square constrained by both available width and height */
 .board-container {
   width: min(100%, calc(100vh - 170px));
   aspect-ratio: 1;
@@ -350,6 +349,49 @@ body {
   padding: 1px 5px;
   border-radius: 3px;
 }
+
+/* ── Explore bar (shown when user tries an alternative line) ── */
+.explore-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #1a2e1a;
+  border: 1px solid #2e5c2e;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.explore-label {
+  color: #7dc97d;
+  font-weight: bold;
+  flex: 1;
+}
+
+.explore-eval {
+  font-weight: bold;
+  color: #4caf50;
+  min-width: 50px;
+}
+
+.explore-best { color: #ccc; }
+
+.ctrl-btn {
+  padding: 4px 12px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: #1e2d50;
+  color: #ccc;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ctrl-btn:hover:not(:disabled) { background: #2a3f6e; }
+.ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Book move badge in move-detail bar */
 .book-badge {

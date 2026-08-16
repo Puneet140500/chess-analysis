@@ -17,6 +17,7 @@ export default function App() {
   const [loadingGames, setLoadingGames] = useState(false)
   const [loadingAnalysis, setLoadingAnalysis] = useState(false)
   const [error, setError] = useState(null)
+  const [exploreScore, setExploreScore] = useState(null)
 
   const handleFetchGames = async (username) => {
     setError(null)
@@ -71,9 +72,10 @@ export default function App() {
   const currentMove  = analysis && currentIndex >= 0 ? analysis.moves[currentIndex] : null
   const currentFen   = currentMove ? currentMove.fenAfter : START_FEN
   // scoreAfter is from the moving player's POV; negate for black moves to get white's POV
-  const currentScore = currentMove
+  const gameScore = currentMove
     ? (currentMove.whiteMove ? currentMove.scoreAfter : -currentMove.scoreAfter)
     : 0
+  const currentScore = exploreScore ?? gameScore
 
   return (
     <div className="app">
@@ -120,7 +122,7 @@ export default function App() {
 
           {/* CENTER PANEL — board fills all available space */}
           <div className="center-panel">
-            <Board fen={currentFen} moveAnalysis={currentMove} />
+            <Board fen={currentFen} moveAnalysis={currentMove} onExploreScore={setExploreScore} />
             {currentMove && (
               <div className="move-detail">
                 <span>Played: <strong>{currentMove.playedMove}</strong></span>

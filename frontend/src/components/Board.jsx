@@ -1,5 +1,7 @@
 import { Chessboard } from 'react-chessboard'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { Chess } from 'chess.js'
+import { analyzePosition } from '../api/chessApi'
 
 const CLASS_COLORS = {
   BRILLIANT: 'rgba(27, 172, 166, 0.6)',
@@ -11,11 +13,22 @@ const CLASS_COLORS = {
   BLUNDER:   'rgba(244, 67, 54, 0.6)',
 }
 
-export default function Board({ fen, moveAnalysis }) {
+export default function Board({ fen, moveAnalysis, onExploreScore }) {
   const containerRef = useRef(null)
   const [size, setSize] = useState(300)
 
-  // Observe the container and match boardWidth to its actual rendered width
+  const [exploreFen, setExploreFen] = useState(null)
+  const [exploreChess, setExploreChess] = useState(null)
+  const [engineResult, setEngineResult] = useState(null)
+
+  // Exit explore when game position changes (user navigates moves)
+  useEffect(() => {
+    setExploreFen(null)
+    setExploreChess(null)
+    setEngineResult(null)
+    if (onExploreScore) onExploreScore(null)
+  }, [fen])
+
   useEffect(() => {
     if (!containerRef.current) return
     const observer = new ResizeObserver(entries => {
@@ -28,27 +41,57 @@ export default function Board({ fen, moveAnalysis }) {
     return () => observer.disconnect()
   }, [])
 
+  const analyze = useCallback(async (currentFen) => {
+    try {
+      const result = await analyzePosition(currentFen)
+      setEngineResult(result)
+      if (onExploreScore) {
+        const chess = new Chess(currentFen)
+        const isWhiteTurn = chess.turn() === 'w'
+        const score = isWhiteTurn ? result.centipawnScore : -result.centipawnScore
+        onExploreScore(score)
+      }
+    } catch {
+      // silent
+    }
+  }, [onExploreScore])
+
+  const onDrop = useCallback(({ sourceSquare, targetSquare }) => {
+    const baseFen = exploreFen ?? fen
+    const chess = new Chess(baseFen)
+    try {
+      const move = chess.move({ from: sourceSquare, to: targetSquare, promotion: 'q' })
+      if (!move) return false
+      const newFen = chess.fen()
+      setExploreFen(newFen)
+      setExploreChess(chess)
+      analyze(newFen)
+      return true
+    } catch {
+      return false
+    }
+  }, [fen, exploreFen, analyze])
+
+  const isExploring = exploreFen !== null
+  const displayFen = exploreFen ?? fen
+
   const customSquareStyles = {}
   const customArrows = []
 
-  if (moveAnalysis) {
-    const fromSquare = moveAnalysis.playedMove.slice(0, 2)
-    const toSquare   = moveAnalysis.playedMove.slice(2, 4)
-
-    // highlight the from/to squares — brown if book move, otherwise classification color
+  if (!isExploring && moveAnalysis) {
+    const from = moveAnalysis.playedMove.slice(0, 2)
+    const to   = moveAnalysis.playedMove.slice(2, 4)
     const moveColor = moveAnalysis.bookMove
       ? 'rgba(200, 160, 94, 0.5)'
       : (CLASS_COLORS[moveAnalysis.classification] || 'rgba(158,158,158,0.4)')
-    customSquareStyles[fromSquare] = { backgroundColor: moveColor }
-    customSquareStyles[toSquare]   = { backgroundColor: moveColor }
+    customSquareStyles[from] = { backgroundColor: moveColor }
+    customSquareStyles[to]   = { backgroundColor: moveColor }
 
-    // arrow for the played move — brown if book move, otherwise classification color
     const arrowColor = moveAnalysis.bookMove
       ? 'rgba(200, 160, 94, 1)'
       : (CLASS_COLORS[moveAnalysis.classification]?.replace(/[\d.]+\)$/, '1)') || 'rgba(158,158,158,1)')
-    customArrows.push({ startSquare: fromSquare, endSquare: toSquare, color: arrowColor })
+    customArrows.push({ startSquare: from, endSquare: to, color: arrowColor })
 
-    // green arrow for best move if it differs (and isn't the played move)
     if (moveAnalysis.bestMove && moveAnalysis.bestMove !== moveAnalysis.playedMove) {
       customArrows.push({
         startSquare: moveAnalysis.bestMove.slice(0, 2),
@@ -58,15 +101,26 @@ export default function Board({ fen, moveAnalysis }) {
     }
   }
 
+  // In explore mode: show best move arrow from engine
+  if (isExploring && engineResult?.bestMove?.length >= 4) {
+    customArrows.push({
+      startSquare: engineResult.bestMove.slice(0, 2),
+      endSquare:   engineResult.bestMove.slice(2, 4),
+      color: 'rgba(76, 175, 80, 1)',
+    })
+  }
+
   return (
     <div className="board-container" ref={containerRef}>
       <Chessboard
         options={{
-          position: fen,
+          position: displayFen,
           boardWidth: size,
           squareStyles: customSquareStyles,
           arrows: customArrows,
-          allowDragging: false,
+          allowDragging: true,
+          onPieceDrop: onDrop,
+          animationDurationInMs: 150,
         }}
       />
     </div>

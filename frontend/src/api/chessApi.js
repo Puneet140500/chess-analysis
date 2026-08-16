@@ -11,3 +11,7 @@ export const getGames = (username, limit = 10) =>
 // Send a game to backend for full Stockfish analysis
 export const analyzeGame = (game) =>
   api.post('/analyze', game).then(r => r.data)
+
+// Analyze a single FEN position — returns bestMove + eval (for interactive board)
+export const analyzePosition = (fen) =>
+  api.post('/analyze-position', { fen }).then(r => r.data)

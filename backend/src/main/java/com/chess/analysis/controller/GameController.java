@@ -1,5 +1,7 @@
 package com.chess.analysis.controller;
 
+import com.chess.analysis.engine.EnginePool;
+import com.chess.analysis.engine.EngineResult;
 import com.chess.analysis.model.Game;
 import com.chess.analysis.model.GameAnalysis;
 import com.chess.analysis.service.AnalysisService;
@@ -9,13 +11,15 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = { "http://localhost:3000", "http://localhost:5173" })
+@CrossOrigin(originPatterns = "http://localhost:*")
 @RequiredArgsConstructor
 public class GameController {
 
     private final AnalysisService analysisService;
+    private final EnginePool enginePool;
 
     // GET /api/games?username=hikaru&limit=10
     // Returns recent games (no analysis) so user can pick one
@@ -35,4 +39,15 @@ public class GameController {
         GameAnalysis analysis = analysisService.analyzeGame(game);
         return ResponseEntity.ok(analysis);
     }
+
+    // POST /api/analyze-position
+    // Body: { "fen": "..." }
+    // Returns best move + eval for a single position (used by interactive board)
+    @PostMapping("/analyze-position")
+    public ResponseEntity<EngineResult> analyzePosition(@RequestBody PositionRequest req) {
+        List<EngineResult> results = enginePool.analyzeAll(List.of(req.fen()));
+        return ResponseEntity.ok(results.get(0));
+    }
+
+    record PositionRequest(String fen) {}
 }
