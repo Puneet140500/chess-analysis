@@ -5,15 +5,13 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-// Communicates with a single Stockfish process via UCI protocol over stdin/stdout
-// UCI (Universal Chess Interface) is a standard text protocol all chess engines support
 @Slf4j
 public class StockfishEngine implements ChessEngine {
 
     private final Process process;
-    private final BufferedWriter writer;   // we write commands TO stockfish
-    private final BufferedReader reader;   // we read responses FROM stockfish
-    private final AtomicBoolean available; // thread-safe flag
+    private final BufferedWriter writer;
+    private final BufferedReader reader;
+    private final AtomicBoolean available;
 
     public StockfishEngine(String stockfishPath) {
         try {
@@ -25,9 +23,10 @@ public class StockfishEngine implements ChessEngine {
             this.available = new AtomicBoolean(true);
 
             sendCommand("uci");
-            waitFor("uciok");  // Stockfish confirms it's in UCI mode
+            waitFor("uciok");
+            sendCommand("setoption name UCI_ShowWDL value true");
             sendCommand("isready");
-            waitFor("readyok"); // Stockfish is ready to receive positions
+            waitFor("readyok");
         } catch (IOException e) {
             throw new RuntimeException("Failed to start Stockfish at: " + stockfishPath, e);
         }
@@ -38,7 +37,7 @@ public class StockfishEngine implements ChessEngine {
         available.set(false);
         try {
             sendCommand("position fen " + fen);
-            sendCommand("go depth " + depth + " movetime " + moveTimeMs);
+            sendCommand("go depth " + depth);
             return parseResult();
         } catch (IOException e) {
             throw new RuntimeException("Error analyzing position: " + fen, e);
@@ -47,12 +46,10 @@ public class StockfishEngine implements ChessEngine {
         }
     }
 
-
-    // Reads Stockfish output line by line until "bestmove" appears
-    // Along the way, captures the last "info" line which has the score
     private EngineResult parseResult() throws IOException {
         String bestMove = null;
         int centipawnScore = 0;
+        int wdlWin = 0, wdlDraw = 0, wdlLoss = 0;
         int depth = 0;
         boolean isMate = false;
         int mateInMoves = 0;
@@ -60,22 +57,35 @@ public class StockfishEngine implements ChessEngine {
         String line;
         while ((line = reader.readLine()) != null) {
             if (line.startsWith("info depth")) {
-                // Example: "info depth 20 seldepth 30 multipv 1 score cp 45 nodes ..."
-                // We parse the score from these lines
+                int d = parseToken(line, "depth");
                 if (line.contains("score cp")) {
-                    centipawnScore = parseScoreCp(line);
-                    depth = parseDepth(line);
+                    centipawnScore = parseToken(line, "cp");
+                    depth = d;
                     isMate = false;
+                    // parse WDL if present: "wdl W D L"
+                    int wdlIdx = line.indexOf(" wdl ");
+                    if (wdlIdx >= 0) {
+                        String[] parts = line.substring(wdlIdx + 5).split(" ");
+                        if (parts.length >= 3) {
+                            try {
+                                wdlWin  = Integer.parseInt(parts[0]);
+                                wdlDraw = Integer.parseInt(parts[1]);
+                                wdlLoss = Integer.parseInt(parts[2]);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
                 } else if (line.contains("score mate")) {
-                    mateInMoves = parseScoreMate(line);
+                    mateInMoves = parseToken(line, "mate");
                     centipawnScore = mateInMoves > 0 ? 32000 : -32000;
+                    wdlWin  = mateInMoves > 0 ? 1000 : 0;
+                    wdlDraw = 0;
+                    wdlLoss = mateInMoves > 0 ? 0 : 1000;
                     isMate = true;
-                    depth = parseDepth(line);
+                    depth = d;
                 }
             } else if (line.startsWith("bestmove")) {
-                // Example: "bestmove e2e4 ponder d7d5"
                 String[] parts = line.split(" ");
-                bestMove = parts[1]; // "e2e4"
+                if (parts.length > 1) bestMove = parts[1];
                 break;
             }
         }
@@ -83,38 +93,20 @@ public class StockfishEngine implements ChessEngine {
         return EngineResult.builder()
                 .bestMove(bestMove)
                 .centipawnScore(centipawnScore)
+                .wdlWin(wdlWin)
+                .wdlDraw(wdlDraw)
+                .wdlLoss(wdlLoss)
                 .depth(depth)
                 .isMate(isMate)
                 .mateInMoves(mateInMoves)
                 .build();
     }
 
-    private int parseScoreCp(String line) {
-        // "... score cp 45 ..." → 45
+    private int parseToken(String line, String token) {
         String[] parts = line.split(" ");
         for (int i = 0; i < parts.length - 1; i++) {
-            if (parts[i].equals("cp")) {
-                return Integer.parseInt(parts[i + 1]);
-            }
-        }
-        return 0;
-    }
-
-    private int parseScoreMate(String line) {
-        String[] parts = line.split(" ");
-        for (int i = 0; i < parts.length - 1; i++) {
-            if (parts[i].equals("mate")) {
-                return Integer.parseInt(parts[i + 1]);
-            }
-        }
-        return 0;
-    }
-
-    private int parseDepth(String line) {
-        String[] parts = line.split(" ");
-        for (int i = 0; i < parts.length - 1; i++) {
-            if (parts[i].equals("depth")) {
-                return Integer.parseInt(parts[i + 1]);
+            if (parts[i].equals(token)) {
+                try { return Integer.parseInt(parts[i + 1]); } catch (NumberFormatException e) { return 0; }
             }
         }
         return 0;
@@ -126,7 +118,6 @@ public class StockfishEngine implements ChessEngine {
         writer.flush();
     }
 
-    // Reads lines until a line containing the expected string appears
     private void waitFor(String expected) throws IOException {
         String line;
         while ((line = reader.readLine()) != null) {
@@ -135,9 +126,7 @@ public class StockfishEngine implements ChessEngine {
     }
 
     @Override
-    public boolean isAvailable() {
-        return available.get();
-    }
+    public boolean isAvailable() { return available.get(); }
 
     @Override
     public void shutdown() {

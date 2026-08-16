@@ -9,8 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 
-// Factory + Pool pattern: creates N Stockfish instances and hands them out to callers
-// When a caller is done with an engine, it returns it to the pool
 @Slf4j
 @Component
 public class EnginePool {
@@ -31,7 +29,6 @@ public class EnginePool {
         this.pool = new LinkedBlockingQueue<>(poolSize);
         this.allEngines = new ArrayList<>(poolSize);
 
-        // Create N Stockfish engine instances upfront (Factory pattern)
         log.info("Initializing {} Stockfish engine instances...", poolSize);
         for (int i = 0; i < poolSize; i++) {
             ChessEngine engine = new StockfishEngine(stockfishPath);
@@ -41,7 +38,6 @@ public class EnginePool {
         log.info("Engine pool ready with {} instances", poolSize);
     }
 
-    // Analyze a list of FEN positions in parallel — returns best move + score for each
     public List<EngineResult> analyzeAll(List<String> fenPositions) {
         ExecutorService executor = Executors.newFixedThreadPool(allEngines.size());
         List<CompletableFuture<EngineResult>> futures = new ArrayList<>();
@@ -70,22 +66,19 @@ public class EnginePool {
         return results;
     }
 
-    // Take an engine from the pool — blocks until one is available
     private ChessEngine borrowEngine() {
         try {
-            return pool.take(); // blocks if pool is empty
+            return pool.take();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted waiting for engine", e);
         }
     }
 
-    // Return an engine to the pool after use
     private void returnEngine(ChessEngine engine) {
         pool.offer(engine);
     }
 
-    // Spring calls this on shutdown — clean up all Stockfish processes
     @PreDestroy
     public void shutdown() {
         log.info("Shutting down engine pool...");

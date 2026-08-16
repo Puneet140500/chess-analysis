@@ -3,13 +3,22 @@ package com.chess.analysis.engine;
 import lombok.Builder;
 import lombok.Data;
 
-// What Stockfish returns for a single position analysis
 @Data
 @Builder
 public class EngineResult {
-    private String bestMove;      // e.g. "e2e4"
-    private int centipawnScore;   // positive = white is winning, negative = black
-    private int depth;            // how deep Stockfish searched
-    private boolean isMate;       // true if it found a forced checkmate
-    private int mateInMoves;      // if isMate, how many moves to mate
+    private String bestMove;
+    private int centipawnScore;
+    private int wdlWin;    // Stockfish WDL win count (0-1000)
+    private int wdlDraw;   // Stockfish WDL draw count (0-1000)
+    private int wdlLoss;   // Stockfish WDL loss count (0-1000)
+    private int depth;
+    private boolean isMate;
+    private int mateInMoves;
+
+    // Win probability from native WDL: (W + D/2) / 1000
+    // Returns -1 if no WDL data (fall back to sigmoid)
+    public double wdlWinProbability() {
+        if (wdlWin == 0 && wdlDraw == 0 && wdlLoss == 0) return -1.0;
+        return (wdlWin + wdlDraw / 2.0) / 1000.0;
+    }
 }

@@ -14,6 +14,7 @@ public class GameAnalysis {
     private String result;            // "1-0", "0-1", "1/2-1/2"
     private String timeControl;
     private String openingName;
+    private String openingEco;
     private double whiteAccuracy;     // 0-100
     private double blackAccuracy;     // 0-100
     private List<MoveAnalysis> moves;

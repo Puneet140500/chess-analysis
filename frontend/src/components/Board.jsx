@@ -29,30 +29,45 @@ export default function Board({ fen, moveAnalysis }) {
   }, [])
 
   const customSquareStyles = {}
-  if (moveAnalysis) {
-    const toSquare = moveAnalysis.playedMove.slice(2, 4)
-    customSquareStyles[toSquare] = {
-      backgroundColor: CLASS_COLORS[moveAnalysis.classification] || 'rgba(158,158,158,0.4)'
-    }
-  }
-
   const customArrows = []
-  if (moveAnalysis && moveAnalysis.bestMove && moveAnalysis.bestMove !== moveAnalysis.playedMove) {
-    customArrows.push([
-      moveAnalysis.bestMove.slice(0, 2),
-      moveAnalysis.bestMove.slice(2, 4),
-      'rgb(0, 128, 0)'
-    ])
+
+  if (moveAnalysis) {
+    const fromSquare = moveAnalysis.playedMove.slice(0, 2)
+    const toSquare   = moveAnalysis.playedMove.slice(2, 4)
+
+    // highlight the from/to squares — brown if book move, otherwise classification color
+    const moveColor = moveAnalysis.bookMove
+      ? 'rgba(200, 160, 94, 0.5)'
+      : (CLASS_COLORS[moveAnalysis.classification] || 'rgba(158,158,158,0.4)')
+    customSquareStyles[fromSquare] = { backgroundColor: moveColor }
+    customSquareStyles[toSquare]   = { backgroundColor: moveColor }
+
+    // arrow for the played move — brown if book move, otherwise classification color
+    const arrowColor = moveAnalysis.bookMove
+      ? 'rgba(200, 160, 94, 1)'
+      : (CLASS_COLORS[moveAnalysis.classification]?.replace(/[\d.]+\)$/, '1)') || 'rgba(158,158,158,1)')
+    customArrows.push({ startSquare: fromSquare, endSquare: toSquare, color: arrowColor })
+
+    // green arrow for best move if it differs (and isn't the played move)
+    if (moveAnalysis.bestMove && moveAnalysis.bestMove !== moveAnalysis.playedMove) {
+      customArrows.push({
+        startSquare: moveAnalysis.bestMove.slice(0, 2),
+        endSquare:   moveAnalysis.bestMove.slice(2, 4),
+        color: 'rgba(76, 175, 80, 1)',
+      })
+    }
   }
 
   return (
     <div className="board-container" ref={containerRef}>
       <Chessboard
-        position={fen}
-        boardWidth={size}
-        customSquareStyles={customSquareStyles}
-        customArrows={customArrows}
-        arePiecesDraggable={false}
+        options={{
+          position: fen,
+          boardWidth: size,
+          squareStyles: customSquareStyles,
+          arrows: customArrows,
+          allowDragging: false,
+        }}
       />
     </div>
   )

@@ -19,7 +19,7 @@ public class AccuracyCalculator {
     public double winProbability(int centipawns) {
         // Cap at mate values to avoid overflow
         int capped = Math.max(-3000, Math.min(3000, centipawns));
-        return 1.0 / (1.0 + Math.exp(-0.00368 * capped));
+        return 1.0 / (1.0 + Math.exp(-0.00368208 * capped));
     }
 
     // Converts win probability DROP to a 0-100 accuracy for a single move
@@ -33,23 +33,26 @@ public class AccuracyCalculator {
                 103.1668 * Math.exp(-0.04354 * winLoss * 100) - 3.1669));
     }
 
-    // Classifies a move based on win probability loss (converted to centipawn-equivalent)
-    // We still use centipawn loss for classification thresholds (more intuitive)
-    public MoveClassification classify(int centipawnLoss) {
-        if (centipawnLoss <= 5)   return MoveClassification.BEST;
-        if (centipawnLoss <= 10)  return MoveClassification.EXCELLENT;
-        if (centipawnLoss <= 25)  return MoveClassification.GOOD;
-        if (centipawnLoss <= 50)  return MoveClassification.INACCURACY;
-        if (centipawnLoss <= 100) return MoveClassification.MISTAKE;
+    // Classifies a move based on win probability loss (0.0–1.0 scale)
+    // Thresholds mirror chess.com's classification bands
+    public MoveClassification classify(double winProbLoss, boolean isBestMove, boolean isBrilliant) {
+        if (isBrilliant)          return MoveClassification.BRILLIANT;
+        if (isBestMove || winProbLoss <= 0.005) return MoveClassification.BEST;
+        if (winProbLoss <= 0.02)  return MoveClassification.EXCELLENT;
+        if (winProbLoss <= 0.06)  return MoveClassification.GOOD;
+        if (winProbLoss <= 0.14)  return MoveClassification.INACCURACY;
+        if (winProbLoss <= 0.28)  return MoveClassification.MISTAKE;
         return MoveClassification.BLUNDER;
     }
 
-    // Game accuracy = average of move accuracies, rounded to 1 decimal
+    // Game accuracy = (arithmetic mean + harmonic mean) / 2 of per-move accuracies
+    // Lichess methodology: harmonic mean penalizes blunders more than arithmetic alone
     public double gameAccuracy(List<Double> moveAccuracies) {
         if (moveAccuracies.isEmpty()) return 0.0;
-        double sum = moveAccuracies.stream().mapToDouble(Double::doubleValue).sum();
-        double avg = sum / moveAccuracies.size();
-        return Math.round(avg * 10.0) / 10.0;
+        double arith = moveAccuracies.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double harm  = moveAccuracies.size() /
+                moveAccuracies.stream().mapToDouble(a -> 1.0 / Math.max(a, 0.1)).sum();
+        return Math.round(((arith + harm) / 2.0) * 10.0) / 10.0;
     }
 
 }

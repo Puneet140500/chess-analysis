@@ -83,9 +83,9 @@ const MoveCell = forwardRef(({ move, index, currentIndex, onClick }, ref) => {
   return (
     <span
       ref={ref}
-      className={`move-cell ${isActive ? 'active' : ''}`}
+      className={`move-cell ${isActive ? 'active' : ''} ${move.bookMove ? 'book-move' : ''}`}
       onClick={() => onClick(index)}
-      title={`${move.classification} — ${move.centipawnLoss}cp loss — accuracy ${Math.round(move.accuracy)}%`}
+      title={`${move.bookMove ? 'Book move — ' : ''}${move.classification} — ${move.centipawnLoss}cp loss — accuracy ${Math.round(move.accuracy)}%`}
     >
       {move.playedMove}
       {symbol && (

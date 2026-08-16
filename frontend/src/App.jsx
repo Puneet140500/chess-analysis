@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getGames, analyzeGame } from './api/chessApi'
 import UsernameForm from './components/UsernameForm'
 import GameList from './components/GameList'
@@ -52,18 +52,31 @@ export default function App() {
 
   const handleMoveClick = (index) => setCurrentIndex(index)
 
-  const handleKeyDown = (e) => {
-    if (!analysis) return
-    if (e.key === 'ArrowRight') setCurrentIndex(i => Math.min(i + 1, analysis.moves.length - 1))
-    if (e.key === 'ArrowLeft')  setCurrentIndex(i => Math.max(i - 1, 0))
-  }
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!analysis) return
+      if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        setCurrentIndex(i => Math.min(i + 1, analysis.moves.length - 1))
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        setCurrentIndex(i => Math.max(i - 1, 0))
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [analysis])
 
   const currentMove  = analysis && currentIndex >= 0 ? analysis.moves[currentIndex] : null
-  const currentFen   = currentMove ? currentMove.fenBefore : START_FEN
-  const currentScore = currentMove ? currentMove.scoreBefore : 0
+  const currentFen   = currentMove ? currentMove.fenAfter : START_FEN
+  // scoreAfter is from the moving player's POV; negate for black moves to get white's POV
+  const currentScore = currentMove
+    ? (currentMove.whiteMove ? currentMove.scoreAfter : -currentMove.scoreAfter)
+    : 0
 
   return (
-    <div className="app" onKeyDown={handleKeyDown} tabIndex={0}>
+    <div className="app">
       <UsernameForm onSubmit={handleFetchGames} loading={loadingGames} />
 
       {error && <div className="error">{error}</div>}
@@ -116,6 +129,9 @@ export default function App() {
                 <span className={`classification ${currentMove.classification.toLowerCase()}`}>
                   {currentMove.classification}
                 </span>
+                {currentMove.bookMove && (
+                  <span className="book-badge">&#9670; Book Move</span>
+                )}
               </div>
             )}
             <div className="nav-hint">← → arrow keys to navigate moves</div>
@@ -124,6 +140,14 @@ export default function App() {
           {/* RIGHT PANEL — move list */}
           <div className="right-panel">
             <div className="game-result-badge">{analysis.result}</div>
+            {(currentMove?.openingName || analysis.openingName) && (
+              <div className="opening-name">
+                {(currentMove?.openingEco || analysis.openingEco) && (
+                  <span className="opening-eco">{currentMove?.openingEco || analysis.openingEco}</span>
+                )}
+                {currentMove?.openingName || analysis.openingName}
+              </div>
+            )}
             <MoveList
               moves={analysis.moves}
               currentIndex={currentIndex}
